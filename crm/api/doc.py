@@ -459,39 +459,39 @@ def get_data(
 					column_data = get_records_based_on_order(
 						doctype, rows, column_filters, page_length, order
 					)
-			else:
-				# Use get_all for CRM Lead due to permissions issue
-				if doctype == "CRM Lead":
-					column_data = frappe.get_all(
-						doctype,
-						fields=rows,
-						filters=column_filters,
-						order_by=order_by,
-						limit=page_length,
-					)
 				else:
-					column_data = frappe.get_list(
-						doctype,
-						fields=rows,
-						filters=column_filters,
-						order_by=order_by,
-						page_length=page_length,
-					)
+					# Use get_all for CRM Lead due to permissions issue
+					if doctype == "CRM Lead":
+						column_data = frappe.get_all(
+							doctype,
+							fields=rows,
+							filters=column_filters,
+							order_by=order_by,
+							limit=page_length,
+						)
+					else:
+						column_data = frappe.get_list(
+							doctype,
+							fields=rows,
+							filters=column_filters,
+							order_by=order_by,
+							page_length=page_length,
+						)
 
-			all_count = (
-				frappe.get_all(doctype, filters=column_filters, fields="count(*) as total_count", limit=1)[0].total_count
-				if doctype == "CRM Lead"
-				else frappe.get_list(doctype, filters=column_filters, fields="count(*) as total_count")[0].total_count
-			)
+				all_count = (
+					frappe.get_all(doctype, filters=column_filters, fields="count(*) as total_count", limit=1)[0].total_count
+					if doctype == "CRM Lead"
+					else frappe.get_list(doctype, filters=column_filters, fields="count(*) as total_count")[0].total_count
+				)
 
 				kc["all_count"] = all_count
 				kc["count"] = len(column_data)
 
-			if order:
-				column_data = sorted(
-					column_data,
-					key=lambda x: order.index(x.get("name")) if x.get("name") in order else len(order),
-				)
+				if order:
+					column_data = sorted(
+						column_data,
+						key=lambda x: order.index(x.get("name")) if x.get("name") in order else len(order),
+					)
 
 			data.append({"column": kc, "fields": kanban_fields, "data": column_data})
 
