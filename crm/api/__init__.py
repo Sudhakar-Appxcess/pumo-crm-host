@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from frappe.core.api.file import get_max_file_size
 from frappe.translate import get_all_translations
 from frappe.utils import cstr, split_emails, validate_email_address
-from frappe.utils.modules import get_modules_from_all_apps_for_user
+# from frappe.utils.modules import get_modules_from_all_apps_for_user
 from frappe.utils.telemetry import POSTHOG_HOST_FIELD, POSTHOG_PROJECT_FIELD
 
 
@@ -60,23 +60,47 @@ def get_posthog_settings():
 	}
 
 
+# def check_app_permission():
+# 	if frappe.session.user == "Administrator":
+# 		return True
+
+# 	allowed_modules = get_modules_from_all_apps_for_user()
+# 	allowed_modules = [x["module_name"] for x in allowed_modules]
+# 	if "FCRM" not in allowed_modules:
+# 		return False
+
+# 	roles = frappe.get_roles()
+# 	if any(
+# 		role in ["System Manager", "Sales User", "Sales Manager"] for role in roles
+# 	):
+# 		return True
+
+# 	return False
+
 def check_app_permission():
 	if frappe.session.user == "Administrator":
 		return True
 
-	allowed_modules = get_modules_from_all_apps_for_user()
-	allowed_modules = [x["module_name"] for x in allowed_modules]
-	if "FCRM" not in allowed_modules:
-		return False
-
+	# Simplified for Frappe v15 compatibility
 	roles = frappe.get_roles()
 	if any(
 		role in ["System Manager", "Sales User", "Sales Manager"] for role in roles
 	):
 		return True
 
-	return False
+	# Alternative: Check if user has access to CRM module
+	try:
+		user_permissions = frappe.get_all("User Permission", 
+			filters={"user": frappe.session.user, "allow": "Module"},
+			fields=["allow"]
+		)
+		allowed_modules = [up["allow"] for up in user_permissions]
+		if "FCRM" in allowed_modules:
+			return True
+	except:
+		pass
 
+	return False
 
 @frappe.whitelist(allow_guest=True)
 def accept_invitation(key: str | None = None):

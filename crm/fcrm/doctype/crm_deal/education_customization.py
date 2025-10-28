@@ -192,3 +192,4 @@ def revert_education_customizations():
     print("Education customizations reverted!")
     return "Education customizations reverted successfully!"
 
+
