@@ -41,34 +41,50 @@ export function useEvent(doctype, docname) {
 
   const eventParticipantsResource = createListResource({
     doctype: 'Event Participants',
-    fields: ['*'],
+    fields: [
+      'name',
+      'parent',
+      'parenttype', 
+      'parentfield',
+      'email',
+      'reference_docname'
+    ],
     parent: 'Event',
+    onError: (error) => {
+      console.warn('Event Participants query failed:', error)
+      // Don't throw error, just log it and continue without participants
+    }
   })
 
   const events = computed(() => {
     if (!eventsResource.data) return []
-    const eventNames = eventsResource.data.map((e) => e.name)
-    if (
-      !eventParticipantsResource.data?.length ||
-      eventsParticipantIsUpdated(eventNames)
-    ) {
-      eventParticipantsResource.update({
-        filters: {
-          parenttype: 'Event',
-          parentfield: 'event_participants',
-          parent: ['in', eventNames],
-        },
-      })
-      !eventParticipantsResource.list.loading &&
-        eventParticipantsResource.reload()
-    } else {
-      eventsResource.data.forEach((event) => {
-        if (typeof event.owner !== 'object') {
-          event.owner = {
-            label: getUser(event.owner).full_name,
-            image: getUser(event.owner).user_image,
-            name: event.owner,
-          }
+    
+    // Process events without participants if the query fails
+    eventsResource.data.forEach((event) => {
+      if (typeof event.owner !== 'object') {
+        event.owner = {
+          label: getUser(event.owner).full_name,
+          image: getUser(event.owner).user_image,
+          name: event.owner,
+        }
+      }
+
+      // Only process participants if the resource is available and not in error state
+      if (eventParticipantsResource.data && !eventParticipantsResource.error) {
+        const eventNames = eventsResource.data.map((e) => e.name)
+        if (
+          !eventParticipantsResource.data?.length ||
+          eventsParticipantIsUpdated(eventNames)
+        ) {
+          eventParticipantsResource.update({
+            filters: {
+              parenttype: 'Event',
+              parentfield: 'event_participants',
+              parent: ['in', eventNames],
+            },
+          })
+          !eventParticipantsResource.list.loading &&
+            eventParticipantsResource.reload()
         }
 
         event.event_participants = [
@@ -87,8 +103,12 @@ export function useEvent(doctype, docname) {
               name: participant.email,
             })),
         ]
-      })
-    }
+      } else {
+        // Fallback: no participants if query fails
+        event.event_participants = []
+        event.participants = [event.owner]
+      }
+    })
 
     return eventsResource.data
   })
@@ -144,11 +164,17 @@ export function normalizeParticipants(list = []) {
   for (const a of list || []) {
     if (!a?.email || seen.has(a.email)) continue
     seen.add(a.email)
-    out.push({
-      email: a.email,
-      reference_doctype: a.reference_doctype || 'Contact',
-      reference_docname: a.reference_docname || '',
-    })
+    
+    // Only include email - the API will handle reference creation
+    const participant = { email: a.email }
+    
+    // Only add reference fields if they exist and are valid
+    if (a.reference_doctype && a.reference_docname && a.reference_docname !== '') {
+      participant.reference_doctype = a.reference_doctype
+      participant.reference_docname = a.reference_docname
+    }
+    
+    out.push(participant)
   }
   return out
 }

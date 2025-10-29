@@ -158,8 +158,6 @@ const events = createListResource({
     'all_day',
     'event_type',
     'color',
-    'reference_doctype',
-    'reference_docname',
   ],
   filters: { status: 'Open', owner: user },
   pageLength: 9999,
@@ -177,8 +175,8 @@ const events = createListResource({
       isFullDay: ev.all_day,
       eventType: ev.event_type,
       color: ev.color,
-      referenceDoctype: ev.reference_doctype,
-      referenceDocname: ev.reference_docname,
+      referenceDoctype: null, // Set to null since we can't query it
+      referenceDocname: null,  // Set to null since we can't query it
     })),
 })
 
@@ -225,8 +223,7 @@ function buildEventPayload(_event) {
     all_day: _event.isFullDay || false,
     event_type: _event.eventType,
     color: _event.color,
-    reference_doctype: _event.referenceDoctype,
-    reference_docname: _event.referenceDocname,
+    // Remove reference fields since we can't query them
     event_participants: _event.event_participants,
   }
 }
@@ -371,8 +368,7 @@ function buildTempEvent(e, duplicate) {
     isFullDay: e.isFullDay || false,
     eventType: e.eventType || 'Public',
     color: e.color || 'green',
-    referenceDoctype: e.referenceDoctype,
-    referenceDocname: e.referenceDocname,
+    // Remove reference fields since we can't query them
     event_participants: e.event_participants || [],
   }
 }

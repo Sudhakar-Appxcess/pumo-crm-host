@@ -181,6 +181,7 @@ import {
   TimePicker,
   dayjs,
   Dropdown,
+  call,
 } from 'frappe-ui'
 import { globalStore } from '@/stores/global'
 import { validateEmail } from '@/utils'
@@ -341,8 +342,10 @@ function update() {
 }
 
 function createEvent() {
-  eventsResource.insert.submit(
-    {
+  // Use custom API method for event creation
+  call('crm.api.event.create_event_with_participants', {
+    event_data: {
+      doctype: 'Event',
       subject: _event.value.title,
       description: _event.value.description,
       starts_on: _event.value.fromDate + ' ' + _event.value.fromTime,
@@ -353,14 +356,17 @@ function createEvent() {
       reference_doctype: props.doctype,
       reference_docname: props.docname,
       event_participants: _event.value.event_participants,
-    },
-    {
-      onSuccess: async () => {
-        await eventsResource.reload()
-        show.value = false
-      },
-    },
-  )
+    }
+  }).then((result) => {
+    if (result.status === 'success') {
+      eventsResource.reload()
+      show.value = false
+    } else {
+      error.value = result.message
+    }
+  }).catch((err) => {
+    error.value = err.message || __('Failed to create event')
+  })
 }
 
 function updateEvent() {

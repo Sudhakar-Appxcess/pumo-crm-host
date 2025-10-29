@@ -303,8 +303,10 @@ const addValue = (option) => {
     existing.add(p)
     const entry = { email: p }
 
-    if (option.name && !hasMultiple) {
+    // Only set reference if we have a valid document reference
+    if (option.name && !hasMultiple && option.name !== 'new' && option.doctype) {
       entry.reference_docname = option.name
+      entry.reference_doctype = option.doctype
     }
     current.push(entry)
   }
