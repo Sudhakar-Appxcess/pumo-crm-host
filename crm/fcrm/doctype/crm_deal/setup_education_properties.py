@@ -116,3 +116,4 @@ print("\n✓ Education customizations applied successfully!")
 print("\nPlease clear cache: bench --site pumo.localhost clear-cache")
 
 
+
