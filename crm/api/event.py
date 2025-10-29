@@ -60,6 +60,44 @@ def create_event_with_participants(event_data):
 		}
 
 
+@frappe.whitelist()
+def get_events_by_reference(doctype, docname):
+	"""
+	Get events linked to a specific doctype/docname
+	This bypasses the field validation restriction on reference_doctype
+	"""
+	try:
+		if not doctype or not docname:
+			return []
+		
+		events = frappe.db.sql("""
+			SELECT 
+				name,
+				status,
+				subject,
+				description,
+				starts_on,
+				ends_on,
+				all_day,
+				event_type,
+				color,
+				owner,
+				reference_doctype,
+				reference_docname,
+				creation
+			FROM `tabEvent`
+			WHERE reference_doctype = %s 
+				AND reference_docname = %s
+				AND status = 'Open'
+			ORDER BY creation DESC
+		""", (doctype, docname), as_dict=True)
+		
+		return events
+	except Exception as e:
+		frappe.log_error(f"Error fetching events by reference: {str(e)}")
+		return []
+
+
 def create_or_get_contact_for_email(email):
 	"""
 	Create a contact for the given email or return existing one

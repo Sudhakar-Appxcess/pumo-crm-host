@@ -1,7 +1,7 @@
 import { usersStore } from '@/stores/users'
-import { dayjs, createListResource } from 'frappe-ui'
+import { dayjs, createListResource, call } from 'frappe-ui'
 import { sameArrayContents } from '@/utils'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { allTimeSlots } from '@/components/Calendar/utils'
 
 export const showEventModal = ref(false)
@@ -10,34 +10,61 @@ export const activeEvent = ref(null)
 export function useEvent(doctype, docname) {
   const { getUser } = usersStore()
 
-  const eventsResource = createListResource({
-    doctype: 'Event',
-    cache: ['calendar', docname],
-    fields: [
-      'name',
-      'status',
-      'subject',
-      'description',
-      'starts_on',
-      'ends_on',
-      'all_day',
-      'event_type',
-      'color',
-      'owner',
-      // Note: reference_doctype and reference_docname are used in filters but 
-      // cannot be queried in fields list due to Frappe permissions validation
-      'creation',
-    ],
-    filters: {
-      reference_doctype: doctype,
-      reference_docname: docname,
+  // Use custom API to bypass Frappe's field validation restrictions on reference_doctype
+  const eventsData = ref([])
+  const eventsLoading = ref(false)
+  const eventsError = ref(null)
+
+  const loadEvents = async () => {
+    // Handle both ref values and direct values
+    const doctypeValue = typeof doctype === 'object' && 'value' in doctype ? doctype.value : doctype
+    const docnameValue = typeof docname === 'object' && 'value' in docname ? docname.value : docname
+    
+    if (!doctypeValue || !docnameValue) {
+      eventsData.value = []
+      return
+    }
+
+    eventsLoading.value = true
+    eventsError.value = null
+    try {
+      const events = await call('crm.api.event.get_events_by_reference', {
+        doctype: doctypeValue,
+        docname: docnameValue,
+      })
+      eventsData.value = events || []
+    } catch (error) {
+      console.error('Error loading events:', error)
+      eventsError.value = error
+      eventsData.value = []
+    } finally {
+      eventsLoading.value = false
+    }
+  }
+
+  // Load events when doctype/docname change - handles both refs and direct values
+  // Use computed to handle both reactive props and direct values
+  const doctypeRef = computed(() => typeof doctype === 'object' && 'value' in doctype ? doctype.value : doctype)
+  const docnameRef = computed(() => typeof docname === 'object' && 'value' in docname ? docname.value : docname)
+  
+  watch([doctypeRef, docnameRef], () => {
+    loadEvents()
+  }, { immediate: true })
+
+  // Create a resource-like object to maintain compatibility with existing code
+  const eventsResource = {
+    data: computed(() => eventsData.value),
+    loading: computed(() => eventsLoading.value),
+    error: computed(() => eventsError.value),
+    reload: loadEvents,
+    list: {
+      loading: computed(() => eventsLoading.value)
     },
-    auto: true,
-    orderBy: 'creation desc',
-    onSuccess: (d) => {
-      console.log(d)
+    setValue: {
+      data: ref(null)
     },
-  })
+    update: () => {}, // No-op for compatibility
+  }
 
   const eventParticipantsResource = createListResource({
     doctype: 'Event Participants',
@@ -57,10 +84,14 @@ export function useEvent(doctype, docname) {
   })
 
   const events = computed(() => {
-    if (!eventsResource.data) return []
+    const eventsList = eventsResource.data.value || []
+    if (!eventsList.length) return []
+    
+    // Create a copy to avoid mutating the original
+    const processedEvents = eventsList.map(event => ({ ...event }))
     
     // Process events without participants if the query fails
-    eventsResource.data.forEach((event) => {
+    processedEvents.forEach((event) => {
       if (typeof event.owner !== 'object') {
         event.owner = {
           label: getUser(event.owner).full_name,
@@ -71,7 +102,7 @@ export function useEvent(doctype, docname) {
 
       // Only process participants if the resource is available and not in error state
       if (eventParticipantsResource.data && !eventParticipantsResource.error) {
-        const eventNames = eventsResource.data.map((e) => e.name)
+        const eventNames = processedEvents.map((e) => e.name)
         if (
           !eventParticipantsResource.data?.length ||
           eventsParticipantIsUpdated(eventNames)
@@ -110,7 +141,7 @@ export function useEvent(doctype, docname) {
       }
     })
 
-    return eventsResource.data
+    return processedEvents
   })
 
   function eventsParticipantIsUpdated(eventNames) {
