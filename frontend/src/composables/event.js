@@ -24,8 +24,8 @@ export function useEvent(doctype, docname) {
       'event_type',
       'color',
       'owner',
-      'reference_doctype',
-      'reference_docname',
+      // Note: reference_doctype and reference_docname are used in filters but 
+      // cannot be queried in fields list due to Frappe permissions validation
       'creation',
     ],
     filters: {
