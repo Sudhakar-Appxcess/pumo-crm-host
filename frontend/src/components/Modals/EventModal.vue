@@ -162,7 +162,7 @@
           :loading="
             mode === 'edit'
               ? eventsResource.setValue.loading
-              : eventsResource.insert.loading
+              : creatingEvent
           "
           @click="update"
         />
@@ -218,6 +218,7 @@ const { eventsResource } = useEvent(props.doctype, props.docname)
 
 const title = ref(null)
 const error = ref(null)
+const creatingEvent = ref(false)
 const mode = computed(() => {
   return _event.value.id == 'duplicate'
     ? 'duplicate'
@@ -342,21 +343,39 @@ function update() {
 }
 
 function createEvent() {
-  // Use custom API method for event creation
-  call('crm.api.event.create_event_with_participants', {
-    event_data: {
-      doctype: 'Event',
-      subject: _event.value.title,
-      description: _event.value.description,
-      starts_on: _event.value.fromDate + ' ' + _event.value.fromTime,
-      ends_on: _event.value.toDate + ' ' + _event.value.toTime,
-      all_day: _event.value.isFullDay || false,
-      event_type: _event.value.eventType,
-      color: _event.value.color,
-      reference_doctype: props.doctype,
-      reference_docname: props.docname,
-      event_participants: _event.value.event_participants,
+  // Ensure reference fields are provided
+  const eventData = {
+    doctype: 'Event',
+    subject: _event.value.title,
+    description: _event.value.description || '',
+    starts_on: _event.value.fromDate + ' ' + _event.value.fromTime,
+    ends_on: _event.value.toDate + ' ' + _event.value.toTime,
+    all_day: _event.value.isFullDay || false,
+    event_type: _event.value.eventType,
+    color: _event.value.color,
+    event_participants: _event.value.event_participants,
+  }
+
+  // Always set reference fields from props if available
+  if (props.doctype && props.docname) {
+    eventData.reference_doctype = props.doctype
+    eventData.reference_docname = props.docname
+  } else if (_event.value.referenceDoctype && _event.value.referenceDocname) {
+    // Fallback to event's own reference if props not available
+    eventData.reference_doctype = _event.value.referenceDoctype
+    eventData.reference_docname = _event.value.referenceDocname
+  } else {
+    // If still no reference, try to get from first participant
+    const firstParticipant = _event.value.event_participants?.[0]
+    if (firstParticipant?.reference_doctype && firstParticipant?.reference_docname) {
+      eventData.reference_doctype = firstParticipant.reference_doctype
+      eventData.reference_docname = firstParticipant.reference_docname
     }
+  }
+
+  creatingEvent.value = true
+  call('crm.api.event.create_event_with_participants', {
+    event_data: eventData
   }).then((result) => {
     if (result.status === 'success') {
       eventsResource.reload()
@@ -366,6 +385,8 @@ function createEvent() {
     }
   }).catch((err) => {
     error.value = err.message || __('Failed to create event')
+  }).finally(() => {
+    creatingEvent.value = false
   })
 }
 
@@ -375,27 +396,45 @@ function updateEvent() {
     return
   }
 
-  eventsResource.setValue.submit(
-    {
-      name: _event.value.id,
-      subject: _event.value.title,
-      description: _event.value.description,
-      starts_on: _event.value.fromDate + ' ' + _event.value.fromTime,
-      ends_on: _event.value.toDate + ' ' + _event.value.toTime,
-      all_day: _event.value.isFullDay,
-      event_type: _event.value.eventType,
-      color: _event.value.color,
-      reference_doctype: props.doctype,
-      reference_docname: props.docname,
-      event_participants: _event.value.event_participants,
+  // Ensure reference fields are set
+  const eventData = {
+    name: _event.value.id,
+    subject: _event.value.title,
+    description: _event.value.description || '',
+    starts_on: _event.value.fromDate + ' ' + _event.value.fromTime,
+    ends_on: _event.value.toDate + ' ' + _event.value.toTime,
+    all_day: _event.value.isFullDay,
+    event_type: _event.value.eventType,
+    color: _event.value.color,
+    event_participants: _event.value.event_participants,
+  }
+
+  // Always set reference fields from props if available, or keep existing
+  if (props.doctype && props.docname) {
+    eventData.reference_doctype = props.doctype
+    eventData.reference_docname = props.docname
+  } else if (_event.value.referenceDoctype && _event.value.referenceDocname) {
+    // Use existing reference if props not available
+    eventData.reference_doctype = _event.value.referenceDoctype
+    eventData.reference_docname = _event.value.referenceDocname
+  } else {
+    // Try to get from first participant as fallback
+    const firstParticipant = _event.value.event_participants?.[0]
+    if (firstParticipant?.reference_doctype && firstParticipant?.reference_docname) {
+      eventData.reference_doctype = firstParticipant.reference_doctype
+      eventData.reference_docname = firstParticipant.reference_docname
+    }
+  }
+
+  eventsResource.setValue.submit(eventData, {
+    onSuccess: async () => {
+      await eventsResource.reload()
+      show.value = false
     },
-    {
-      onSuccess: async () => {
-        await eventsResource.reload()
-        show.value = false
-      },
-    },
-  )
+    onError: (err) => {
+      error.value = err.message || __('Failed to update event')
+    }
+  })
 }
 
 function duplicateEvent() {

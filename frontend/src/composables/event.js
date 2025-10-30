@@ -51,6 +51,10 @@ export function useEvent(doctype, docname) {
     loadEvents()
   }, { immediate: true })
 
+  // Create loading states for operations
+  const setValueLoading = ref(false)
+  const insertLoading = ref(false)
+
   // Create a resource-like object to maintain compatibility with existing code
   const eventsResource = {
     data: computed(() => eventsData.value),
@@ -61,7 +65,57 @@ export function useEvent(doctype, docname) {
       loading: computed(() => eventsLoading.value)
     },
     setValue: {
-      data: ref(null)
+      data: ref(null),
+      loading: computed(() => setValueLoading.value),
+      submit: async (data, options = {}) => {
+        setValueLoading.value = true
+        try {
+          const result = await call('crm.api.event.update_event_with_participants', {
+            name: data.name,
+            event_data: data
+          })
+          if (result.status === 'success') {
+            eventsResource.setValue.data.value = result
+            if (options.onSuccess) {
+              await options.onSuccess()
+            }
+            await loadEvents()
+          } else {
+            throw new Error(result.message || 'Failed to update event')
+          }
+        } catch (error) {
+          if (options.onError) {
+            options.onError(error)
+          } else {
+            throw error
+          }
+        } finally {
+          setValueLoading.value = false
+        }
+      }
+    },
+    delete: {
+      submit: async (name, options = {}) => {
+        try {
+          await call('frappe.client.delete', {
+            doctype: 'Event',
+            name: name
+          })
+          if (options.onSuccess) {
+            await options.onSuccess()
+          }
+          await loadEvents()
+        } catch (error) {
+          if (options.onError) {
+            options.onError(error)
+          } else {
+            throw error
+          }
+        }
+      }
+    },
+    insert: {
+      loading: computed(() => insertLoading.value)
     },
     update: () => {}, // No-op for compatibility
   }
