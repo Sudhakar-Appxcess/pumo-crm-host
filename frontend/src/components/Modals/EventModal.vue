@@ -161,7 +161,7 @@
           :disabled="!dirty"
           :loading="
             mode === 'edit'
-              ? eventsResource.setValue.loading
+             ? eventsResource.setValue.loading
               : creatingEvent
           "
           @click="update"
